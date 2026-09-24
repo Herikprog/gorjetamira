@@ -68,7 +68,7 @@ export default function Navbar() {
       position: 'sticky',
       top: 0,
       zIndex: 50,
-      backdropFilter: 'blur(8px)',
+      backdropFilter: 'blur(12px)',
     }}>
       <div style={{
         maxWidth: '72rem',
@@ -88,8 +88,8 @@ export default function Navbar() {
           color: 'var(--text-primary)',
         }}>
           <div style={{
-            width: '2rem',
-            height: '2rem',
+            width: '2.25rem',
+            height: '2.25rem',
             borderRadius: '0.5rem',
             background: 'var(--accent)',
             display: 'flex',
@@ -97,11 +97,11 @@ export default function Navbar() {
             justifyContent: 'center',
             flexShrink: 0,
           }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
             </svg>
           </div>
-          <span style={{ fontWeight: 700, fontSize: '1.0625rem', letterSpacing: '-0.01em' }}>
+          <span style={{ fontWeight: 800, fontSize: '1.125rem', letterSpacing: '-0.01em' }}>
             Gorjeta Mira
           </span>
         </Link>
@@ -121,7 +121,7 @@ export default function Navbar() {
                   padding: '0.5rem 0.875rem',
                   borderRadius: '0.5rem',
                   fontSize: '0.875rem',
-                  fontWeight: isActive ? 600 : 400,
+                  fontWeight: isActive ? 700 : 500,
                   color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
                   backgroundColor: isActive ? 'var(--accent-light)' : 'transparent',
                   textDecoration: 'none',
@@ -144,13 +144,17 @@ export default function Navbar() {
             className="btn btn-ghost btn-sm show-mobile"
             aria-label="Menu"
             id="mobile-menu-toggle"
+            style={{
+              padding: '0.5rem',
+              borderRadius: '0.5rem',
+            }}
           >
             {menuOpen ? (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M18 6 6 18M6 6l12 12"/>
               </svg>
             ) : (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/>
               </svg>
             )}
@@ -158,13 +162,17 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Mobile menu */}
+      {/* Mobile menu dropdown */}
       {menuOpen && (
         <div style={{
           borderTop: '1px solid var(--border)',
           backgroundColor: 'var(--bg-secondary)',
-          padding: '0.75rem 1rem',
-        }} className="show-mobile">
+          padding: '0.75rem 1rem 1rem 1rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.375rem',
+          boxShadow: 'var(--shadow-lg)',
+        }} className="show-mobile animate-fade-in">
           {navItems.map(item => {
             const isActive = pathname === item.href
             return (
@@ -175,19 +183,25 @@ export default function Navbar() {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.75rem',
-                  padding: '0.75rem',
-                  borderRadius: '0.5rem',
-                  fontSize: '0.9375rem',
-                  fontWeight: isActive ? 600 : 400,
+                  gap: '0.875rem',
+                  padding: '0.875rem 1rem',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '1rem',
+                  fontWeight: isActive ? 700 : 500,
                   color: isActive ? 'var(--accent)' : 'var(--text-primary)',
-                  backgroundColor: isActive ? 'var(--accent-light)' : 'transparent',
+                  backgroundColor: isActive ? 'var(--accent-light)' : 'var(--bg-muted)',
+                  border: isActive ? '1px solid color-mix(in srgb, var(--accent) 30%, transparent)' : '1px solid transparent',
                   textDecoration: 'none',
-                  marginBottom: '0.25rem',
                 }}
               >
-                {item.icon}
-                {item.label}
+                <div style={{
+                  color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}>
+                  {item.icon}
+                </div>
+                <span>{item.label}</span>
               </Link>
             )
           })}
@@ -197,7 +211,7 @@ export default function Navbar() {
       <style jsx>{`
         .hidden-mobile { display: flex; }
         .show-mobile { display: none; }
-        @media (max-width: 640px) {
+        @media (max-width: 820px) {
           .hidden-mobile { display: none !important; }
           .show-mobile { display: flex !important; }
         }
