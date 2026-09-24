@@ -16,6 +16,7 @@ export interface Tip {
   id: string
   date: string       // formato ISO: 'YYYY-MM-DD'
   amount: number     // valor em euros (ex: 150.00)
+  settlement_id?: string | null
   created_at: string
   updated_at: string
 }
@@ -29,8 +30,65 @@ export interface Absence {
   employee?: Employee // relação carregada opcionalmente
 }
 
+export interface Vale {
+  id: string
+  employee_id: string
+  amount: number     // valor em euros (ex: 50.00)
+  date: string       // formato ISO: 'YYYY-MM-DD'
+  notes?: string | null
+  settlement_id?: string | null
+  created_at: string
+  employee?: Employee
+}
+
+export interface SettlementEmployee {
+  id: string
+  settlement_id: string
+  employee_id: string
+  gross_tips_cents: number
+  vales_cents: number
+  net_paid_cents: number
+  created_at: string
+  employee?: Employee
+}
+
+export interface Settlement {
+  id: string
+  payment_date: string   // ISO 'YYYY-MM-DD'
+  period_start: string   // ISO 'YYYY-MM-DD'
+  period_end: string     // ISO 'YYYY-MM-DD'
+  total_days: number
+  total_tips_cents: number
+  total_vales_cents: number
+  total_paid_cents: number
+  created_at: string
+  employees?: SettlementEmployee[]
+}
+
 // ============================================================
-// Resultado do cálculo de gorjetas
+// Acúmulo Atual (Saldo Atual / Período sem Fechamento)
+// ============================================================
+
+export interface EmployeeAccumulationSummary {
+  employee: Employee
+  gross_tips_cents: number        // gorjeta acumulada total
+  vales_cents: number             // vales recebidos no período
+  net_to_pay_cents: number        // gross - vales
+  available_vales_cents: number   // saldo disponível para novos vales
+}
+
+export interface CurrentAccumulationSummary {
+  days_count: number
+  period_start: string | null
+  period_end: string | null
+  total_tips_cents: number
+  total_vales_cents: number
+  total_net_cents: number
+  employees: EmployeeAccumulationSummary[]
+}
+
+// ============================================================
+// Resultado do cálculo de gorjetas diário
 // ============================================================
 
 export interface ShiftResult {
@@ -53,7 +111,6 @@ export interface DayCalculationResult {
   morning: ShiftResult
   night: ShiftResult
   employees: EmployeeTipResult[]
-  // Garantia: sum(employees[*].total_cents) === total_cents
 }
 
 // ============================================================
@@ -80,9 +137,12 @@ export interface TipFormData {
   amount: string
 }
 
-// ============================================================
-// Resumo semanal
-// ============================================================
+export interface ValeFormData {
+  employee_id: string
+  amount: string
+  date: string
+  notes?: string
+}
 
 export interface WeeklyEmployeeSummary {
   employee: Employee

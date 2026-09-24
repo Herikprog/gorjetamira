@@ -34,6 +34,17 @@ export async function upsertTip(date: string, amount: number): Promise<Tip> {
   return data
 }
 
+export async function getUnsettledTips(): Promise<Tip[]> {
+  const { data, error } = await supabase
+    .from('tips')
+    .select('*')
+    .is('settlement_id', null)
+    .order('date', { ascending: true })
+
+  if (error) throw new Error(error.message)
+  return data ?? []
+}
+
 export async function getTipsForWeek(weekStart: string, weekEnd: string): Promise<Tip[]> {
   const { data, error } = await supabase
     .from('tips')
@@ -46,7 +57,7 @@ export async function getTipsForWeek(weekStart: string, weekEnd: string): Promis
   return data ?? []
 }
 
-export async function getAllTips(limit = 30): Promise<Tip[]> {
+export async function getAllTips(limit = 100): Promise<Tip[]> {
   const { data, error } = await supabase
     .from('tips')
     .select('*')
@@ -55,19 +66,4 @@ export async function getAllTips(limit = 30): Promise<Tip[]> {
 
   if (error) throw new Error(error.message)
   return data ?? []
-}
-
-export async function getCurrentWeekTips(): Promise<Tip[]> {
-  const today = new Date()
-  const dayOfWeek = today.getDay()
-  const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek // segunda como início da semana
-  const monday = new Date(today)
-  monday.setDate(today.getDate() + diff)
-  const sunday = new Date(monday)
-  sunday.setDate(monday.getDate() + 6)
-
-  return getTipsForWeek(
-    monday.toISOString().split('T')[0],
-    sunday.toISOString().split('T')[0]
-  )
 }
