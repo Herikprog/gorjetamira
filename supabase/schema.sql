@@ -116,3 +116,13 @@ create index if not exists employees_active_idx on employees(active);
 create index if not exists vales_employee_id_idx on vales(employee_id);
 create index if not exists vales_settlement_id_idx on vales(settlement_id);
 create index if not exists settlement_employees_settlement_id_idx on settlement_employees(settlement_id);
+
+-- ============================================================
+-- Desativar RLS (Row Level Security) para MVP sem autenticação
+-- ============================================================
+alter table employees disable row level security;
+alter table tips disable row level security;
+alter table absences disable row level security;
+alter table settlements disable row level security;
+alter table settlement_employees disable row level security;
+alter table vales disable row level security;
