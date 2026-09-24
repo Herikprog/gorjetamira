@@ -173,7 +173,6 @@ export default function HistoryPageClient() {
               padding: '0.75rem 1.25rem',
               fontWeight: tab === t ? 600 : 400,
               color: tab === t ? 'var(--accent)' : 'var(--text-secondary)',
-              borderBottom: `2px solid ${tab === t ? 'var(--accent)' : 'transparent'}`,
               background: 'none',
               border: 'none',
               borderBottom: tab === t ? '2px solid var(--accent)' : '2px solid transparent',
