@@ -18,7 +18,6 @@ export default function DashboardClient({
   settlements,
 }: DashboardClientProps) {
   const router = useRouter()
-  const today = new Date().toISOString().split('T')[0]
 
   function handleRefresh() {
     router.refresh()
@@ -44,7 +43,7 @@ export default function DashboardClient({
       {/* Botão de Atalho para Registar Gorjeta */}
       <div style={{ marginBottom: '2.5rem' }}>
         <Link
-          href={`/tips?date=${today}`}
+          href="/tips"
           className="btn btn-secondary"
           id="register-tips-btn"
           style={{
