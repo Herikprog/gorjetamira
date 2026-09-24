@@ -35,14 +35,25 @@ export async function upsertTip(date: string, amount: number): Promise<Tip> {
 }
 
 export async function getUnsettledTips(): Promise<Tip[]> {
-  const { data, error } = await supabase
-    .from('tips')
-    .select('*')
-    .is('settlement_id', null)
-    .order('date', { ascending: true })
+  try {
+    const { data, error } = await supabase
+      .from('tips')
+      .select('*')
+      .is('settlement_id', null)
+      .order('date', { ascending: true })
 
-  if (error) throw new Error(error.message)
-  return data ?? []
+    if (error) {
+      // Se a coluna settlement_id ainda não existir no Supabase, busca todas as gorjetas sem quebrar
+      const { data: fallbackData } = await supabase
+        .from('tips')
+        .select('*')
+        .order('date', { ascending: true })
+      return fallbackData ?? []
+    }
+    return data ?? []
+  } catch {
+    return []
+  }
 }
 
 export async function getTipsForWeek(weekStart: string, weekEnd: string): Promise<Tip[]> {

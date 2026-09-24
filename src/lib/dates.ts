@@ -5,16 +5,24 @@
 /**
  * Formata uma data ISO (YYYY-MM-DD) para exibição pt-PT (DD/MM/YYYY)
  */
-export function formatDate(dateStr: string): string {
-  const [year, month, day] = dateStr.split('-')
+export function formatDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return '—'
+  const cleanStr = String(dateStr).split('T')[0]
+  const parts = cleanStr.split('-')
+  if (parts.length < 3) return cleanStr
+  const [year, month, day] = parts
   return `${day}/${month}/${year}`
 }
 
 /**
  * Formata uma data ISO curta (DD/MM)
  */
-export function formatDateShort(dateStr: string): string {
-  const [, month, day] = dateStr.split('-')
+export function formatDateShort(dateStr: string | null | undefined): string {
+  if (!dateStr) return '—'
+  const cleanStr = String(dateStr).split('T')[0]
+  const parts = cleanStr.split('-')
+  if (parts.length < 3) return cleanStr
+  const [, month, day] = parts
   return `${day}/${month}`
 }
 
@@ -40,7 +48,8 @@ export function toLocalISO(date: Date): string {
  * Retorna o início (segunda) e fim (domingo) da semana para uma data dada.
  */
 export function getWeekBounds(dateStr: string): { weekStart: string; weekEnd: string } {
-  const date = new Date(dateStr + 'T12:00:00')
+  const cleanStr = String(dateStr).split('T')[0]
+  const date = new Date(cleanStr + 'T12:00:00')
   const dayOfWeek = date.getDay() // 0 = domingo
   const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
 
@@ -67,7 +76,8 @@ export function getCurrentWeekBounds(): { weekStart: string; weekEnd: string } {
  * Avança ou recua uma semana.
  */
 export function offsetWeek(weekStart: string, direction: 1 | -1): string {
-  const date = new Date(weekStart + 'T12:00:00')
+  const cleanStr = String(weekStart).split('T')[0]
+  const date = new Date(cleanStr + 'T12:00:00')
   date.setDate(date.getDate() + direction * 7)
   return toLocalISO(date)
 }

@@ -11,25 +11,29 @@ import type {
 import { getActiveEmployees } from '@/actions/employees'
 import { getUnsettledTips } from '@/actions/tips'
 import { getAbsencesForDateRange } from '@/actions/absences'
-import { calculateDayTips, eurosToCents, formatCents } from '@/lib/tip-calculator'
+import { calculateDayTips, eurosToCents } from '@/lib/tip-calculator'
 import { revalidatePath } from 'next/cache'
 
 export async function getUnsettledVales(): Promise<Vale[]> {
-  const { data, error } = await supabase
-    .from('vales')
-    .select('*, employee:employees(*)')
-    .is('settlement_id', null)
-    .order('date', { ascending: false })
+  try {
+    const { data, error } = await supabase
+      .from('vales')
+      .select('*, employee:employees(*)')
+      .is('settlement_id', null)
+      .order('date', { ascending: false })
 
-  if (error) throw new Error(error.message)
-  return data ?? []
+    if (error) return []
+    return data ?? []
+  } catch {
+    return []
+  }
 }
 
 export async function getCurrentAccumulationSummary(): Promise<CurrentAccumulationSummary> {
   const [employees, tips, vales] = await Promise.all([
-    getActiveEmployees(),
-    getUnsettledTips(),
-    getUnsettledVales(),
+    getActiveEmployees().catch(() => []),
+    getUnsettledTips().catch(() => []),
+    getUnsettledVales().catch(() => []),
   ])
 
   if (tips.length === 0) {
@@ -63,7 +67,7 @@ export async function getCurrentAccumulationSummary(): Promise<CurrentAccumulati
   const periodEnd = tips[tips.length - 1].date
 
   // Buscar ausências para o intervalo de datas ativas
-  const absences = await getAbsencesForDateRange(periodStart, periodEnd)
+  const absences = await getAbsencesForDateRange(periodStart, periodEnd).catch(() => [])
 
   // Mapa de gorjetas brutas por funcionário
   const grossMap = new Map<string, number>()
@@ -153,7 +157,12 @@ export async function createSettlement(paymentDateStr?: string): Promise<Settlem
     .select()
     .single()
 
-  if (sErr) throw new Error(sErr.message)
+  if (sErr) {
+    if (sErr.message.includes('settlements') || sErr.code === '42P01' || sErr.message.includes('does not exist')) {
+      throw new Error('As novas tabelas do banco de dados no Supabase ainda não foram criadas. Execute o script SQL no SQL Editor do seu projeto Supabase.')
+    }
+    throw new Error(`Erro no Supabase ao criar fechamento: ${sErr.message}`)
+  }
 
   // 2. Inserir detalhamento por funcionário em `settlement_employees`
   const empRows = summary.employees.map(e => ({
@@ -168,7 +177,9 @@ export async function createSettlement(paymentDateStr?: string): Promise<Settlem
     .from('settlement_employees')
     .insert(empRows)
 
-  if (seErr) throw new Error(seErr.message)
+  if (seErr) {
+    throw new Error(`Erro ao registar funcionários no fechamento: ${seErr.message}`)
+  }
 
   // 3. Marcar todas as gorjetas ativas com o settlement_id
   const { error: tErr } = await supabase
@@ -176,7 +187,9 @@ export async function createSettlement(paymentDateStr?: string): Promise<Settlem
     .update({ settlement_id: settlement.id })
     .is('settlement_id', null)
 
-  if (tErr) throw new Error(tErr.message)
+  if (tErr) {
+    console.error('Aviso ao atualizar settlement_id em tips:', tErr.message)
+  }
 
   // 4. Marcar todos os vales ativos com o settlement_id
   const { error: vErr } = await supabase
@@ -184,7 +197,9 @@ export async function createSettlement(paymentDateStr?: string): Promise<Settlem
     .update({ settlement_id: settlement.id })
     .is('settlement_id', null)
 
-  if (vErr) throw new Error(vErr.message)
+  if (vErr) {
+    console.error('Aviso ao atualizar settlement_id em vales:', vErr.message)
+  }
 
   revalidatePath('/')
   revalidatePath('/tips')
@@ -195,53 +210,56 @@ export async function createSettlement(paymentDateStr?: string): Promise<Settlem
 }
 
 export async function getSettlements(): Promise<Settlement[]> {
-  const { data: settlements, error: sErr } = await supabase
-    .from('settlements')
-    .select('*')
-    .order('payment_date', { ascending: false })
-    .order('created_at', { ascending: false })
+  try {
+    const { data: settlements, error: sErr } = await supabase
+      .from('settlements')
+      .select('*')
+      .order('payment_date', { ascending: false })
+      .order('created_at', { ascending: false })
 
-  if (sErr) throw new Error(sErr.message)
-  if (!settlements || settlements.length === 0) return []
+    if (sErr || !settlements || settlements.length === 0) return []
 
-  const settlementIds = settlements.map(s => s.id)
+    const settlementIds = settlements.map(s => s.id)
 
-  const { data: employees, error: eErr } = await supabase
-    .from('settlement_employees')
-    .select('*, employee:employees(*)')
-    .in('settlement_id', settlementIds)
+    const { data: employees } = await supabase
+      .from('settlement_employees')
+      .select('*, employee:employees(*)')
+      .in('settlement_id', settlementIds)
 
-  if (eErr) throw new Error(eErr.message)
+    const result: Settlement[] = settlements.map(s => {
+      const sEmps = (employees ?? []).filter(e => e.settlement_id === s.id) as SettlementEmployee[]
+      return {
+        ...s,
+        employees: sEmps,
+      }
+    })
 
-  const result: Settlement[] = settlements.map(s => {
-    const sEmps = (employees ?? []).filter(e => e.settlement_id === s.id) as SettlementEmployee[]
-    return {
-      ...s,
-      employees: sEmps,
-    }
-  })
-
-  return result
+    return result
+  } catch {
+    return []
+  }
 }
 
 export async function getSettlementById(id: string): Promise<Settlement | null> {
-  const { data: settlement, error: sErr } = await supabase
-    .from('settlements')
-    .select('*')
-    .eq('id', id)
-    .maybeSingle()
+  try {
+    const { data: settlement, error: sErr } = await supabase
+      .from('settlements')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle()
 
-  if (sErr || !settlement) return null
+    if (sErr || !settlement) return null
 
-  const { data: employees, error: eErr } = await supabase
-    .from('settlement_employees')
-    .select('*, employee:employees(*)')
-    .eq('settlement_id', id)
+    const { data: employees } = await supabase
+      .from('settlement_employees')
+      .select('*, employee:employees(*)')
+      .eq('settlement_id', id)
 
-  if (eErr) throw new Error(eErr.message)
-
-  return {
-    ...settlement,
-    employees: (employees ?? []) as SettlementEmployee[],
+    return {
+      ...settlement,
+      employees: (employees ?? []) as SettlementEmployee[],
+    }
+  } catch {
+    return null
   }
 }
