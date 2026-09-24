@@ -19,7 +19,7 @@ export default function SettleModal({
   summary,
   onSuccess,
 }: SettleModalProps) {
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0])
+  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split('T')[0])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -30,7 +30,11 @@ export default function SettleModal({
     setError(null)
 
     try {
-      await createSettlement(paymentDate)
+      const res = await createSettlement(paymentDate)
+      if (!res.success) {
+        setError(res.error || 'Erro ao realizar o fechamento.')
+        return
+      }
       onSuccess()
       onClose()
     } catch (err) {
@@ -88,11 +92,12 @@ export default function SettleModal({
             borderColor: 'var(--danger)',
             backgroundColor: 'color-mix(in srgb, var(--danger) 10%, transparent)',
             color: 'var(--danger)',
-            padding: '0.75rem',
+            padding: '0.875rem',
             marginBottom: '1rem',
             fontSize: '0.875rem',
+            lineHeight: '1.4',
           }}>
-            {error}
+            <strong>⚠️ Atenção:</strong> {error}
           </div>
         )}
 

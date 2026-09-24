@@ -24,7 +24,7 @@ export default function ValeModal({
 }: ValeModalProps) {
   const [employeeId, setEmployeeId] = useState(preselectedEmployeeId || '')
   const [amount, setAmount] = useState('')
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0])
   const [notes, setNotes] = useState('')
 
   const [loading, setLoading] = useState(false)
@@ -66,12 +66,18 @@ export default function ValeModal({
     setError(null)
 
     try {
-      await createVale({
+      const res = await createVale({
         employee_id: employeeId,
         amount: numericAmount,
         date,
         notes,
       })
+
+      if (!res.success) {
+        setError(res.error || 'Erro ao registar vale.')
+        return
+      }
+
       setAmount('')
       setNotes('')
       onSuccess()

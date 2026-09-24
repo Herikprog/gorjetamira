@@ -12,6 +12,7 @@ import { getActiveEmployees } from '@/actions/employees'
 import { getUnsettledTips } from '@/actions/tips'
 import { getAbsencesForDateRange } from '@/actions/absences'
 import { calculateDayTips, eurosToCents } from '@/lib/tip-calculator'
+import { todayISO } from '@/lib/dates'
 import { revalidatePath } from 'next/cache'
 
 export async function getUnsettledVales(): Promise<Vale[]> {
@@ -37,7 +38,6 @@ export async function getCurrentAccumulationSummary(): Promise<CurrentAccumulati
   ])
 
   if (tips.length === 0) {
-    // Caso não haja gorjetas pendentes de fechamento
     const employeeSummaries: EmployeeAccumulationSummary[] = employees.map(emp => {
       const empVales = vales.filter(v => v.employee_id === emp.id)
       const valesCents = empVales.reduce((acc, v) => acc + eurosToCents(Number(v.amount)), 0)
@@ -66,10 +66,8 @@ export async function getCurrentAccumulationSummary(): Promise<CurrentAccumulati
   const periodStart = tips[0].date
   const periodEnd = tips[tips.length - 1].date
 
-  // Buscar ausências para o intervalo de datas ativas
   const absences = await getAbsencesForDateRange(periodStart, periodEnd).catch(() => [])
 
-  // Mapa de gorjetas brutas por funcionário
   const grossMap = new Map<string, number>()
   for (const emp of employees) {
     grossMap.set(emp.id, 0)
@@ -94,7 +92,6 @@ export async function getCurrentAccumulationSummary(): Promise<CurrentAccumulati
     }
   }
 
-  // Mapa de vales por funcionário
   const valesMap = new Map<string, number>()
   for (const v of vales) {
     const current = valesMap.get(v.employee_id) ?? 0
@@ -103,7 +100,6 @@ export async function getCurrentAccumulationSummary(): Promise<CurrentAccumulati
 
   const totalValesCents = vales.reduce((acc, v) => acc + eurosToCents(Number(v.amount)), 0)
 
-  // Construir resumo por funcionário
   const employeeSummaries: EmployeeAccumulationSummary[] = employees.map(emp => {
     const grossCents = grossMap.get(emp.id) ?? 0
     const valesCents = valesMap.get(emp.id) ?? 0
@@ -119,7 +115,6 @@ export async function getCurrentAccumulationSummary(): Promise<CurrentAccumulati
     }
   })
 
-  // Ordenar funcionários por valor bruto decrescente
   employeeSummaries.sort((a, b) => b.gross_tips_cents - a.gross_tips_cents)
 
   return {
@@ -133,80 +128,93 @@ export async function getCurrentAccumulationSummary(): Promise<CurrentAccumulati
   }
 }
 
-export async function createSettlement(paymentDateStr?: string): Promise<Settlement> {
-  const summary = await getCurrentAccumulationSummary()
+export async function createSettlement(paymentDateStr?: string): Promise<{
+  success: boolean
+  error?: string
+  settlement?: Settlement
+}> {
+  try {
+    const summary = await getCurrentAccumulationSummary()
 
-  if (summary.days_count === 0 || summary.total_tips_cents === 0) {
-    throw new Error('Não há gorjetas acumuladas no momento para realizar o fechamento.')
-  }
-
-  const paymentDate = paymentDateStr || new Date().toISOString().split('T')[0]
-
-  // 1. Inserir fechamento principal em `settlements`
-  const { data: settlement, error: sErr } = await supabase
-    .from('settlements')
-    .insert({
-      payment_date: paymentDate,
-      period_start: summary.period_start!,
-      period_end: summary.period_end!,
-      total_days: summary.days_count,
-      total_tips_cents: summary.total_tips_cents,
-      total_vales_cents: summary.total_vales_cents,
-      total_paid_cents: summary.total_net_cents,
-    })
-    .select()
-    .single()
-
-  if (sErr) {
-    if (sErr.message.includes('settlements') || sErr.code === '42P01' || sErr.message.includes('does not exist')) {
-      throw new Error('As novas tabelas do banco de dados no Supabase ainda não foram criadas. Execute o script SQL no SQL Editor do seu projeto Supabase.')
+    if (summary.days_count === 0 || summary.total_tips_cents === 0) {
+      return {
+        success: false,
+        error: 'Não há gorjetas acumuladas no momento para realizar o fechamento.',
+      }
     }
-    throw new Error(`Erro no Supabase ao criar fechamento: ${sErr.message}`)
+
+    const paymentDate = paymentDateStr || todayISO()
+    const periodStart = summary.period_start || paymentDate
+    const periodEnd = summary.period_end || paymentDate
+
+    // 1. Inserir fechamento principal em `settlements`
+    const { data: settlement, error: sErr } = await supabase
+      .from('settlements')
+      .insert({
+        payment_date: paymentDate,
+        period_start: periodStart,
+        period_end: periodEnd,
+        total_days: summary.days_count,
+        total_tips_cents: summary.total_tips_cents,
+        total_vales_cents: summary.total_vales_cents,
+        total_paid_cents: summary.total_net_cents,
+      })
+      .select()
+      .single()
+
+    if (sErr) {
+      return {
+        success: false,
+        error: `Erro no Supabase ao criar fechamento: ${sErr.message}. Verifique se executou o script SQL no SQL Editor do Supabase.`,
+      }
+    }
+
+    // 2. Inserir detalhamento por funcionário em `settlement_employees`
+    if (summary.employees.length > 0) {
+      const empRows = summary.employees.map(e => ({
+        settlement_id: settlement.id,
+        employee_id: e.employee.id,
+        gross_tips_cents: e.gross_tips_cents,
+        vales_cents: e.vales_cents,
+        net_paid_cents: e.net_to_pay_cents,
+      }))
+
+      const { error: seErr } = await supabase
+        .from('settlement_employees')
+        .insert(empRows)
+
+      if (seErr) {
+        return {
+          success: false,
+          error: `Erro ao registar funcionários no fechamento: ${seErr.message}`,
+        }
+      }
+    }
+
+    // 3. Marcar todas as gorjetas ativas com o settlement_id
+    await supabase
+      .from('tips')
+      .update({ settlement_id: settlement.id })
+      .is('settlement_id', null)
+
+    // 4. Marcar todos os vales ativos com o settlement_id
+    await supabase
+      .from('vales')
+      .update({ settlement_id: settlement.id })
+      .is('settlement_id', null)
+
+    revalidatePath('/')
+    revalidatePath('/tips')
+    revalidatePath('/history')
+    revalidatePath('/vales')
+
+    return { success: true, settlement }
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Erro inesperado ao realizar o fechamento.',
+    }
   }
-
-  // 2. Inserir detalhamento por funcionário em `settlement_employees`
-  const empRows = summary.employees.map(e => ({
-    settlement_id: settlement.id,
-    employee_id: e.employee.id,
-    gross_tips_cents: e.gross_tips_cents,
-    vales_cents: e.vales_cents,
-    net_paid_cents: e.net_to_pay_cents,
-  }))
-
-  const { error: seErr } = await supabase
-    .from('settlement_employees')
-    .insert(empRows)
-
-  if (seErr) {
-    throw new Error(`Erro ao registar funcionários no fechamento: ${seErr.message}`)
-  }
-
-  // 3. Marcar todas as gorjetas ativas com o settlement_id
-  const { error: tErr } = await supabase
-    .from('tips')
-    .update({ settlement_id: settlement.id })
-    .is('settlement_id', null)
-
-  if (tErr) {
-    console.error('Aviso ao atualizar settlement_id em tips:', tErr.message)
-  }
-
-  // 4. Marcar todos os vales ativos com o settlement_id
-  const { error: vErr } = await supabase
-    .from('vales')
-    .update({ settlement_id: settlement.id })
-    .is('settlement_id', null)
-
-  if (vErr) {
-    console.error('Aviso ao atualizar settlement_id em vales:', vErr.message)
-  }
-
-  revalidatePath('/')
-  revalidatePath('/tips')
-  revalidatePath('/history')
-  revalidatePath('/vales')
-
-  return settlement
 }
 
 export async function getSettlements(): Promise<Settlement[]> {
